@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; font-src 'self'; form-action 'none'; base-uri 'none'; object-src 'none'"
+    />
+    <title>Council Desk</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="themes.css" />
+    <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css" />
+  </head>
+  <body>
+    <div id="app">
+      <aside id="sidebar">
+        <div class="sidebar-top drag">
+          <button id="toggle-sidebar" class="icon-btn no-drag" title="Toggle sidebar (⌘B)" aria-label="Toggle sidebar">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="2.5" /><path d="M8 4v12" /></svg>
+          </button>
+        </div>
+        <button id="new-session" class="new-session">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11" /></svg>
+          New session
+        </button>
+        <div class="sidebar-label">Sessions</div>
+        <div class="sidebar-search">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5" /><path d="M13 13l3.5 3.5" /></svg>
+          <input id="session-search" type="search" placeholder="Search sessions (⇧⌘F)" aria-label="Search sessions" />
+        </div>
+        <nav id="session-list" aria-label="Sessions"></nav>
+        <div id="account" class="account"></div>
+      </aside>
+
+      <main id="main">
+        <header id="topbar" class="drag">
+          <button id="show-sidebar" class="icon-btn no-drag" title="Show sidebar (⌘B)" aria-label="Show sidebar">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="2.5" /><path d="M8 4v12" /></svg>
+          </button>
+          <div id="session-title"></div>
+          <span id="session-branch" class="branch-label no-drag" hidden></span>
+          <div id="session-folder" class="no-drag"></div>
+          <button id="changes-btn" class="icon-btn no-drag changes-btn" title="Changes since the last commit (⇧⌘D)" aria-label="Changes">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3.5v6M7 6.5h6M7 14.5h6" /><rect x="3.5" y="2.5" width="13" height="15" rx="2.5" /></svg>
+            <span id="changes-count" class="count-badge" hidden></span>
+          </button>
+          <button id="terminal-btn" class="icon-btn no-drag" title="Terminal (⌃`)" aria-label="Terminal">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="2.5" /><path d="M6 8l2.5 2L6 12M10.5 12.5H14" /></svg>
+          </button>
+          <button id="browser-btn" class="icon-btn no-drag" title="Browser (⇧⌘B): a browser you and Claude share" aria-label="Browser">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" /><path d="M3 10h14M10 3c2 2.2 2.8 4.5 2.8 7s-.8 4.8-2.8 7c-2-2.2-2.8-4.5-2.8-7S8 5.2 10 3z" /></svg>
+          </button>
+          <button id="memory-btn" class="icon-btn no-drag" title="Project memory (CLAUDE.md)" aria-label="Project memory">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H15v12H5.5A1.5 1.5 0 0 0 4 16.5z" /><path d="M4 16.5A1.5 1.5 0 0 0 5.5 18H15v-3" /><path d="M7.5 6.5h4.5M7.5 9h3" /></svg>
+          </button>
+        </header>
+
+        <section id="scroller">
+          <div id="transcript-host"></div>
+        </section>
+
+        <footer id="composer-wrap">
+          <div id="slash-menu" class="slash-menu" role="listbox" hidden></div>
+          <div id="composer" class="composer">
+            <div id="attachments" class="attachments" hidden></div>
+            <textarea id="input" rows="1" placeholder="Ask Claude to build, fix, or explain something…"></textarea>
+            <div class="composer-bar">
+              <button id="attach" class="icon-btn attach-btn" title="Attach files or images" aria-label="Attach files">
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 9.5l-5.8 5.8a3.5 3.5 0 0 1-5-5l6.4-6.4a2.3 2.3 0 0 1 3.3 3.3l-6.3 6.3a1.1 1.1 0 0 1-1.6-1.6l5.7-5.7" /></svg>
+              </button>
+              <button id="folder-chip" class="chip" title="Project folder"></button>
+              <button id="branch-toggle" class="chip branch-chip" aria-pressed="false" hidden title="Work on a new branch in its own folder, so the main checkout stays untouched">
+                <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="6" cy="5" r="1.8" /><circle cx="6" cy="15" r="1.8" /><circle cx="14" cy="7" r="1.8" /><path d="M6 6.8v6.4M14 8.8c0 3-8 2.2-8 4.4" /></svg>
+                New branch
+              </button>
+              <label class="chip select-chip" title="Permission mode">
+                <select id="mode-select" aria-label="Permission mode">
+                  <option value="default">Ask permissions</option>
+                  <option value="acceptEdits">Auto-accept edits</option>
+                  <option value="auto" title="A safety check approves routine steps, including shell commands, blocks risky ones, and asks you when unsure">Auto</option>
+                  <option value="plan">Plan mode</option>
+                </select>
+              </label>
+              <label class="chip select-chip" title="Model">
+                <select id="model-select" aria-label="Model">
+                  <option value="">Default model</option>
+                  <option value="opus">Opus</option>
+                  <option value="sonnet">Sonnet</option>
+                  <option value="haiku">Haiku</option>
+                </select>
+              </label>
+              <label class="chip select-chip" title="Effort: how hard Claude thinks before answering">
+                <select id="effort-select" aria-label="Effort">
+                  <option value="">Effort: auto</option>
+                  <option value="low">Effort: low</option>
+                  <option value="medium">Effort: medium</option>
+                  <option value="high">Effort: high</option>
+                  <option value="xhigh">Effort: extra high</option>
+                  <option value="max">Effort: max</option>
+                </select>
+              </label>
+              <button id="fast-toggle" class="chip fast-chip" aria-pressed="false" title="Fast mode">
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 2.5L4.5 11h5l-1 6.5L15.5 9h-5z" /></svg>
+                Fast
+              </button>
+              <span class="spacer"></span>
+              <button id="context-meter" class="context-meter" hidden title="Context used">
+                <svg viewBox="0 0 20 20" aria-hidden="true"><circle class="ring-bg" cx="10" cy="10" r="7" /><circle class="ring" cx="10" cy="10" r="7" /></svg>
+                <span id="context-pct"></span>
+              </button>
+              <button id="send" class="send" title="Send (Enter)" aria-label="Send">
+                <svg class="icon-send" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 15.5v-11M5 9.5l5-5 5 5" /></svg>
+                <svg class="icon-stop" viewBox="0 0 20 20" aria-hidden="true"><rect x="6" y="6" width="8" height="8" rx="1.5" /></svg>
+              </button>
+            </div>
+          </div>
+          <div class="composer-hint">Enter to send · Shift+Enter for a new line · / for commands · Esc to stop</div>
+        </footer>
+
+        <section id="terminal-panel" class="terminal-panel" hidden></section>
+      </main>
+
+      <aside id="file-viewer" class="file-viewer" hidden></aside>
+      <aside id="changes-panel" class="file-viewer" hidden></aside>
+      <aside id="split-panel" class="file-viewer split-panel" hidden></aside>
+      <aside id="browser-panel" class="file-viewer browser-panel" hidden></aside>
+    </div>
+
+    <div id="drop-overlay" hidden><div>Drop files to attach</div></div>
+
+    <div id="welcome" hidden>
+      <div class="welcome-card">
+        <div class="welcome-mark"><img src="assets/icon.png" alt="" /></div>
+        <h1>Welcome to Council Desk</h1>
+        <p>Council Desk is a desktop app for Claude Code. It runs Claude Code on this Mac and keeps your sessions, settings and memory in Claude Code's own config folder.</p>
+        <p>
+          The supported way to use it is an <strong>Anthropic API key</strong>. Usage is billed to your own Anthropic Console account at API rates.
+          <a href="https://console.anthropic.com/settings/keys" id="welcome-console">Create a key in the Console</a>.
+        </p>
+        <form id="welcome-form" class="welcome-form">
+          <input id="welcome-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your API key" aria-label="Anthropic API key" />
+          <button id="welcome-save" class="primary" type="submit">Save key</button>
+        </form>
+        <p class="welcome-hint">
+          The key is saved encrypted, with the encryption key held in your macOS Keychain, and the app gives it only to Claude Code, whose commands can read it. You can also start the app from a terminal with ANTHROPIC_API_KEY set.
+        </p>
+        <p class="welcome-hint">
+          Already use Claude Code with another setup it supports, such as Amazon Bedrock or Google Vertex AI? Council Desk uses the same configuration and environment.
+          <button id="welcome-check" class="btn link" type="button">Check again</button>
+        </p>
+        <p id="welcome-status" class="muted" role="status"></p>
+      </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

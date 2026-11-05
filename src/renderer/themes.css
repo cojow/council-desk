@@ -1,0 +1,141 @@
+/* Theme presets. "Warm" (the default) lives in styles.css and follows the system
+   light/dark setting; each preset here is a fixed palette. Keep THEMES in app.js
+   and THEME_BACKGROUNDS in main.js in step with these. */
+
+:root[data-theme='midnight'] {
+  --bg: #14161c; --sidebar: #0f1116; --surface: #1b1e26; --raised: #232733; --border: #2a2f3b; --border-strong: #3a4150;
+  --text: #ebe9e6; --muted: #9aa0ab; --faint: #6b7280;
+  --accent: #ff7a45; --accent-hover: #ff9466; --accent-soft: rgba(255, 122, 69, 0.15); --on-accent: #1a0d06;
+  --ok: #5fcf8a; --danger: #ff6b6b; --warn: #f2b84b; --plan: #7aa2ff;
+  --add-bg: rgba(95, 207, 138, 0.14); --del-bg: rgba(255, 107, 107, 0.14); --code-bg: #0f1116;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 20px rgba(0, 0, 0, 0.3);
+  color-scheme: dark;
+}
+
+:root[data-theme='nord'] {
+  --bg: #2e3440; --sidebar: #272c36; --surface: #353c4a; --raised: #3b4252; --border: #434c5e; --border-strong: #4c566a;
+  --text: #eceff4; --muted: #b0b8c8; --faint: #7d889c;
+  --accent: #88c0d0; --accent-hover: #9fd0de; --accent-soft: rgba(136, 192, 208, 0.16); --on-accent: #1d2530;
+  --ok: #a3be8c; --danger: #bf616a; --warn: #ebcb8b; --plan: #b48ead;
+  --add-bg: rgba(163, 190, 140, 0.16); --del-bg: rgba(191, 97, 106, 0.18); --code-bg: #272c36;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.25);
+  color-scheme: dark;
+}
+
+:root[data-theme='forest'] {
+  --bg: #141d18; --sidebar: #0f1712; --surface: #1a261f; --raised: #213027; --border: #2a3b31; --border-strong: #375042;
+  --text: #e4eee7; --muted: #9db3a5; --faint: #6c8476;
+  --accent: #8fd19e; --accent-hover: #a7e0b4; --accent-soft: rgba(143, 209, 158, 0.15); --on-accent: #0d1a12;
+  --ok: #8fd19e; --danger: #f08a7e; --warn: #e3c565; --plan: #7cc4d6;
+  --add-bg: rgba(143, 209, 158, 0.14); --del-bg: rgba(240, 138, 126, 0.14); --code-bg: #0f1712;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 20px rgba(0, 0, 0, 0.3);
+  color-scheme: dark;
+}
+
+:root[data-theme='dusk'] {
+  --bg: #1a1326; --sidebar: #140e1e; --surface: #221a31; --raised: #2c2240; --border: #382b50; --border-strong: #4a3a68;
+  --text: #f3ecff; --muted: #b6a7d2; --faint: #7f6f9c;
+  --accent: #ff6ec7; --accent-hover: #ff8fd4; --accent-soft: rgba(255, 110, 199, 0.15); --on-accent: #2a0a1f;
+  --ok: #6ef0c2; --danger: #ff7a8a; --warn: #ffc46b; --plan: #8fb3ff;
+  --add-bg: rgba(110, 240, 194, 0.13); --del-bg: rgba(255, 122, 138, 0.15); --code-bg: #140e1e;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 22px rgba(20, 0, 40, 0.45);
+  color-scheme: dark;
+}
+:root[data-theme='dusk'] .send:not(.stop) { background: linear-gradient(135deg, #ff6ec7, #ff9a5a); }
+
+:root[data-theme='terminal'] {
+  --bg: #0e0f0e; --sidebar: #0a0b0a; --surface: #151715; --raised: #1c1f1c; --border: #262a26; --border-strong: #343a34;
+  --text: #e2e6e1; --muted: #98a096; --faint: #636b62;
+  --accent: #c6f432; --accent-hover: #d6ff5a; --accent-soft: rgba(198, 244, 50, 0.12); --on-accent: #101300;
+  --ok: #c6f432; --danger: #ff6b5b; --warn: #ffcc4d; --plan: #5ad1ff;
+  --add-bg: rgba(198, 244, 50, 0.1); --del-bg: rgba(255, 107, 91, 0.13); --code-bg: #0a0b0a;
+  --sans: ui-monospace, 'SF Mono', Menlo, monospace; --serif: ui-monospace, 'SF Mono', Menlo, monospace;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 6px 20px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+}
+:root[data-theme='terminal'] body { font-size: 13px; }
+
+:root[data-theme='paper'] {
+  --bg: #ffffff; --sidebar: #f6f7f9; --surface: #ffffff; --raised: #eef1f5; --border: #e3e7ee; --border-strong: #cdd3dd;
+  --text: #111827; --muted: #5b6472; --faint: #9aa3b2;
+  --accent: #2f5bea; --accent-hover: #2148cc; --accent-soft: rgba(47, 91, 234, 0.1); --on-accent: #ffffff;
+  --ok: #15803d; --danger: #dc2626; --warn: #d97706; --plan: #7c3aed;
+  --add-bg: rgba(21, 128, 61, 0.1); --del-bg: rgba(220, 38, 38, 0.09); --code-bg: #f6f7f9;
+  --shadow: 0 1px 2px rgba(17, 24, 39, 0.06), 0 4px 16px rgba(17, 24, 39, 0.06);
+  color-scheme: light;
+}
+
+:root[data-theme='sandstone'] {
+  --bg: #f3ede3; --sidebar: #e9e0d1; --surface: #fbf8f3; --raised: #e8dfcf; --border: #dccfba; --border-strong: #c9b89c;
+  --text: #2b2118; --muted: #76685a; --faint: #a69684;
+  --accent: #2f7d7a; --accent-hover: #256966; --accent-soft: rgba(47, 125, 122, 0.12); --on-accent: #ffffff;
+  --ok: #4f7f3a; --danger: #b8432f; --warn: #c27c1e; --plan: #6a5acd;
+  --add-bg: rgba(79, 127, 58, 0.13); --del-bg: rgba(184, 67, 47, 0.11); --code-bg: #ece4d6;
+  --shadow: 0 1px 2px rgba(43, 33, 24, 0.07), 0 4px 16px rgba(43, 33, 24, 0.07);
+  color-scheme: light;
+}
+:root[data-theme='terminal'] .chip { font-size: 11.5px; padding-left: 7px; padding-right: 7px; }
+
+/* Red Neon: red neon lines on a black grid background, with cyan for things that
+   went right. */
+:root[data-theme='red-neon'] {
+  --bg: #07080b; --sidebar: #050608; --surface: #0d0f14; --raised: #161920; --border: #3a1216; --border-strong: #5e1a20;
+  --text: #f6eae9; --muted: #c09391; --faint: #85605e;
+  --accent: #ff2d2d; --accent-hover: #ff5a4f; --accent-soft: rgba(255, 45, 45, 0.14); --on-accent: #1a0000;
+  --ok: #3df2ff; --danger: #ff4d6d; --warn: #ffb347; --plan: #3df2ff;
+  --add-bg: rgba(61, 242, 255, 0.1); --del-bg: rgba(255, 45, 45, 0.15); --code-bg: #050608;
+  --shadow: 0 0 0 1px rgba(255, 45, 45, 0.12), 0 6px 24px rgba(255, 20, 20, 0.12);
+  color-scheme: dark;
+}
+:root[data-theme='red-neon'] #scroller {
+  background-image:
+    linear-gradient(rgba(255, 45, 45, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 45, 45, 0.06) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+:root[data-theme='red-neon'] #sidebar { border-right-color: rgba(255, 45, 45, 0.45); box-shadow: 1px 0 18px rgba(255, 45, 45, 0.12); }
+:root[data-theme='red-neon'] .composer { border-color: rgba(255, 45, 45, 0.55); box-shadow: 0 0 22px rgba(255, 45, 45, 0.2), inset 0 0 18px rgba(255, 45, 45, 0.05); }
+:root[data-theme='red-neon'] .send:not(:disabled), :root[data-theme='red-neon'] .btn.primary { box-shadow: 0 0 14px rgba(255, 45, 45, 0.65); }
+:root[data-theme='red-neon'] .card, :root[data-theme='red-neon'] .todos { box-shadow: 0 0 18px rgba(255, 45, 45, 0.14); }
+:root[data-theme='red-neon'] .empty h1 {
+  font-family: var(--sans); font-weight: 300; text-transform: uppercase; letter-spacing: 0.14em; font-size: 26px;
+  text-shadow: 0 0 18px rgba(255, 45, 45, 0.7);
+}
+:root[data-theme='red-neon'] .empty .mark, :root[data-theme='red-neon'] .working .mark { filter: drop-shadow(0 0 6px rgba(255, 45, 45, 0.9)); }
+:root[data-theme='red-neon'] .sidebar-label, :root[data-theme='red-neon'] .usage-section, :root[data-theme='red-neon'] .todos-title { letter-spacing: 0.16em; text-transform: uppercase; }
+:root[data-theme='red-neon'] .tool.ok .tool-status, :root[data-theme='red-neon'] .todo.completed .box { filter: drop-shadow(0 0 4px rgba(61, 242, 255, 0.8)); }
+
+/* Cyan Neon: cyan light on a black grid background, with orange for errors and a
+   light trail under the title bar. */
+:root[data-theme='cyan-neon'] {
+  --bg: #04080d; --sidebar: #03060a; --surface: #0a121b; --raised: #111c28; --border: #0f2f3d; --border-strong: #17485c;
+  --text: #e6f8ff; --muted: #8fb8c8; --faint: #5a7f8e;
+  --accent: #2de2ff; --accent-hover: #6aecff; --accent-soft: rgba(45, 226, 255, 0.14); --on-accent: #00151a;
+  --ok: #5df2b0; --danger: #ff6a3d; --warn: #ffc24b; --plan: #8aa8ff;
+  --add-bg: rgba(93, 242, 176, 0.1); --del-bg: rgba(255, 106, 61, 0.15); --code-bg: #03060a;
+  --shadow: 0 0 0 1px rgba(45, 226, 255, 0.1), 0 6px 24px rgba(0, 160, 255, 0.12);
+  color-scheme: dark;
+}
+:root[data-theme='cyan-neon'] #scroller {
+  background-image:
+    linear-gradient(rgba(45, 226, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(45, 226, 255, 0.06) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+:root[data-theme='cyan-neon'] #topbar { border-bottom: 1px solid transparent; }
+:root[data-theme='cyan-neon'] #topbar::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(45, 226, 255, 0.9) 35%, #e6f8ff 50%, rgba(45, 226, 255, 0.9) 65%, transparent);
+  box-shadow: 0 0 12px rgba(45, 226, 255, 0.7);
+}
+:root[data-theme='cyan-neon'] #sidebar { border-right-color: rgba(45, 226, 255, 0.45); box-shadow: 1px 0 18px rgba(45, 226, 255, 0.12); }
+:root[data-theme='cyan-neon'] .composer { border-color: rgba(45, 226, 255, 0.55); box-shadow: 0 0 22px rgba(45, 226, 255, 0.2), inset 0 0 18px rgba(45, 226, 255, 0.05); }
+:root[data-theme='cyan-neon'] .send:not(:disabled), :root[data-theme='cyan-neon'] .btn.primary { box-shadow: 0 0 14px rgba(45, 226, 255, 0.65); }
+:root[data-theme='cyan-neon'] .card, :root[data-theme='cyan-neon'] .todos { box-shadow: 0 0 18px rgba(45, 226, 255, 0.14); }
+:root[data-theme='cyan-neon'] .empty h1 {
+  font-family: var(--sans); font-weight: 300; text-transform: uppercase; letter-spacing: 0.14em; font-size: 26px;
+  text-shadow: 0 0 18px rgba(45, 226, 255, 0.75);
+}
+:root[data-theme='cyan-neon'] .empty .mark, :root[data-theme='cyan-neon'] .working .mark { filter: drop-shadow(0 0 6px rgba(45, 226, 255, 0.9)); }
+:root[data-theme='cyan-neon'] .sidebar-label, :root[data-theme='cyan-neon'] .usage-section, :root[data-theme='cyan-neon'] .todos-title { letter-spacing: 0.16em; text-transform: uppercase; }
+:root[data-theme='cyan-neon'] .tool.ok .tool-status, :root[data-theme='cyan-neon'] .todo.completed .box { filter: drop-shadow(0 0 4px rgba(93, 242, 176, 0.8)); }

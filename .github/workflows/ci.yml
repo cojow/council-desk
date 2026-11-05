@@ -1,0 +1,28 @@
+name: CI
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Check JavaScript syntax
+        shell: bash
+        run: |
+          while IFS= read -r -d '' file; do
+            node --check "$file" || exit 1
+          done < <(find . -type d \( -name node_modules -o -name .git \) -prune -o -type f \( -name '*.mjs' -o -path './src/*.js' \) -print0)
+      - run: npm test
+      - run: node scripts/check-pii.mjs

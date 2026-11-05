@@ -1,0 +1,61 @@
+{
+  "name": "council-desk",
+  "productName": "Council Desk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A desktop app for Claude Code",
+  "license": "MIT",
+  "engines": { "node": ">=22.12" },
+  "main": "src/main/main.js",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "start": "electron .",
+    "icon": "node scripts/make-icon.mjs",
+    "smoke": "node scripts/smoke-test.mjs",
+    "dist": "electron-builder --mac --dir && node scripts/finish-app.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.310",
+    "@highlightjs/cdn-assets": "^11.11.1",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "dompurify": "^3.4.17",
+    "marked": "^18.1.1",
+    "node-pty": "^1.2.0-beta.12",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
+    "sharp": "^0.35.5"
+  },
+  "allowScripts": {
+    "electron@45.0.0": true,
+    "sharp@0.35.5": true,
+    "node-pty@1.2.0-beta.12": true
+  },
+  "build": {
+    "appId": "local.council-desk",
+    "productName": "Council Desk",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**",
+      "package.json"
+    ],
+    "asar": false,
+    "mac": {
+      "target": "dir",
+      "icon": "build/icon.png",
+      "category": "public.app-category.developer-tools",
+      "identity": null,
+      "extendInfo": {
+        "NSHumanReadableCopyright": "Copyright © 2026 the Council Desk contributors"
+      }
+    },
+    "npmRebuild": false
+  }
+}

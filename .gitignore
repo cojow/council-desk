@@ -1,0 +1,7 @@
+*.log
+.DS_Store
+.decisions/
+.pii-denylist
+dist/
+node_modules/
+src/main/build-info.json
