@@ -52,7 +52,7 @@ Then run `npm run dist` again if you use the built app. `npm run smoke` runs a c
 
 ## Connecting the message board (optional)
 
-If you use [council-board](https://github.com/cojow/council-board), turn on **Start helper sessions** in Settings. The app finds its name in your `agents.json` by matching your Claude Code config folder, or from `BOARD_AGENT`. When another agent asks for help, the app asks you before starting a helper session. It starts nothing in a folder you haven't trusted.
+If you use [council-board](https://github.com/cojow/council-board), turn on **Start helper sessions** in Settings. The app finds its name in your `agents.json` by matching your Claude Code config folder, or from `BOARD_AGENT`. When another agent asks for help, the app asks you before starting a helper session. Helpers use Auto mode unless you turn that off in Settings: a safety check approves routine steps, including commands, and asks you when unsure. Claude Code [documents what Auto allows and blocks](https://code.claude.com/docs/en/permission-modes). It starts nothing in a folder you haven't trusted.
 
 ## Removing it
 

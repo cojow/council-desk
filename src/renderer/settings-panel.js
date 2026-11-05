@@ -10,7 +10,7 @@ const TOGGLES = [
     hint: "For council-board users: when another agent on the board asks this app's agent (named in the board's agents.json) for help, Council Desk asks you, and if you say yes it starts a session in that project that runs /help-out. Only while Council Desk is open, and only in folders you trust.",
     defaultOn: false,
   },
-  { key: 'boardHelperEdits', label: 'Helper sessions auto-accept file edits', hint: "Otherwise they ask before edits, like any session. Commands still ask unless your permission rules allow them.", defaultOn: false },
+  { key: 'boardHelperAuto', label: 'Helper sessions use Auto mode', hint: 'A safety check approves routine steps, including commands, and asks you when unsure. If Auto isn\'t available, or this is off, they ask before edits and commands, like any session.', defaultOn: true },
   { key: 'browserTools', label: 'Let Claude use the browser', hint: 'Claude can open, read, click and type in the Browser pane (⇧⌘B). It asks before clicking or typing. Applies to new sessions.' },
   {
     key: 'keepRunning',

@@ -204,13 +204,13 @@ const boardWatch = createBoardWatch({
       notify(`${brief.from} asked for help in ${name}`, "Council Desk hasn't trusted that folder yet, so no helper started. Start a session there and choose Trust folder, then run /help-out.");
       return;
     }
-    const edits = Boolean(store.get().boardHelperEdits);
+    const auto = store.get().boardHelperAuto !== false;
     notify(`${brief.from} asks ${brief.to} for help`, `In ${name}. Council Desk is asking whether to start a helper session.`);
     app.dock?.bounce('informational');
     const { response } = await dialog.showMessageBox({
       type: 'question',
       message: `${brief.from} asks ${brief.to} for help in ${name}`,
-      detail: `Goal: ${String(brief.goal || '').slice(0, 300)}\n\nWants help with: ${String(brief.helpWith || '').slice(0, 600)}\n\nA helper session runs /help-out in ${brief.project}${brief.model ? `, as ${brief.model}${brief.effort ? ` at ${brief.effort} effort` : ''} to match ${brief.from}` : ''}, and ${edits ? 'auto-accepts file edits (Settings)' : 'asks before editing files'}. Only start it if you asked ${brief.from} for this.`,
+      detail: `Goal: ${String(brief.goal || '').slice(0, 300)}\n\nWants help with: ${String(brief.helpWith || '').slice(0, 600)}\n\nA helper session runs /help-out in ${brief.project}${brief.model ? `, as ${brief.model}${brief.effort ? ` at ${brief.effort} effort` : ''} to match ${brief.from}` : ''}, and ${auto ? 'works in Auto mode: a safety check approves routine steps, including commands, and asks you when unsure (Settings)' : 'asks before editing files or running commands'}. Only start it if you asked ${brief.from} for this.`,
       buttons: ['Start helper session', 'Not now'],
       defaultId: 0,
       cancelId: 1,
@@ -221,7 +221,7 @@ const boardWatch = createBoardWatch({
       return;
     }
     // The helper works at the requester's level: same model and effort (when the request says).
-    const start = { type: 'start-helper', briefId: brief.id, cwd: brief.project, from: brief.from, goal: String(brief.goal || '').slice(0, 120), mode: edits ? 'acceptEdits' : 'default', model: brief.model || null, effort: brief.effort || null };
+    const start = { type: 'start-helper', briefId: brief.id, cwd: brief.project, from: brief.from, goal: String(brief.goal || '').slice(0, 120), mode: auto ? 'auto' : 'default', model: brief.model || null, effort: brief.effort || null };
     const send = () => win?.webContents.send('board', start);
     if (win.webContents.isLoading()) win.webContents.once('did-finish-load', () => setTimeout(send, 2000));
     else send();

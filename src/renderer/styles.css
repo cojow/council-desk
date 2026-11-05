@@ -331,7 +331,6 @@ body.sidebar-hidden #show-sidebar { display: grid; margin-left: 72px; }
 .send.stop { background: var(--text); color: var(--bg); }
 .send.stop .icon-send { display: none; }
 .send.stop .icon-stop { display: block; }
-.composer-hint { max-width: 780px; margin: 7px auto 0; text-align: center; font-size: 11.5px; color: var(--faint); }
 
 /* Sign-in */
 #welcome { position: fixed; inset: 0; background: var(--bg); display: grid; place-items: center; z-index: 40; -webkit-app-region: drag; overflow-y: auto; }

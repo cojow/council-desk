@@ -33,9 +33,9 @@ test('board helpers default off and every app start path checks the setting', (t
   for (const line of starts) assert.match(line, /boardHelpers/, line);
 });
 
-test('board helpers without auto-edits ask explicitly, whatever the folder last used', () => {
+test('board helpers set their mode explicitly, whatever the folder last used', () => {
   const source = fs.readFileSync(path.join(REPO, 'src/main/main.js'), 'utf8');
-  assert.match(source, /mode: edits \? 'acceptEdits' : 'default'/);
+  assert.match(source, /mode: auto \? 'auto' : 'default'/);
 });
 
 test('the Browser pane holds back sensitive field values from Claude', () => {
