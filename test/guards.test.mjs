@@ -52,4 +52,6 @@ test('page security: forms and base URLs are refused, and Markdown uses an allow
   assert.match(markdown, /ALLOWED_TAGS/);
   const tags = /ALLOWED_TAGS: \[([^\]]*)\]/.exec(markdown)[1];
   for (const tag of ['form', 'button', 'style', 'textarea', 'select', 'iframe']) assert.ok(!tags.includes(`'${tag}'`), tag);
+  assert.match(markdown, /ALLOW_DATA_ATTR: false/);
+  assert.match(markdown, /ALLOW_ARIA_ATTR: false/);
 });

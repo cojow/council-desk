@@ -34,9 +34,10 @@ const realFolder = (folder) => {
   }
 };
 
+// Claude Code looks for .mcp.json from the real folder upward, so the same walk is used here.
 function projectServers(cwd) {
   const servers = new Map(); // the nearest .mcp.json wins
-  for (let dir = cwd; ; dir = path.dirname(dir)) {
+  for (let dir = realFolder(cwd); ; dir = path.dirname(dir)) {
     for (const [name, config] of Object.entries(readJson(path.join(dir, '.mcp.json'))?.mcpServers || {})) if (!servers.has(name)) servers.set(name, config);
     if (dir === path.dirname(dir)) return servers;
   }

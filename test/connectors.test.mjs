@@ -76,6 +76,19 @@ test('project connectors cannot approve themselves, and a changed connector asks
   `));
 });
 
+test('a link into a folder still finds the shared connectors above the real folder', (t) => {
+  const s = sandbox(t);
+  succeeds(s.evaluate(`
+    const { unapprovedProjectServers } = await import(${JSON.stringify(moduleURL('src/main/connectors.js'))});
+    const root = process.env.TEST_PROJECT;
+    fs.mkdirSync(path.join(root, 'inner'));
+    fs.writeFileSync(path.join(root, '.mcp.json'), JSON.stringify({ mcpServers: { above: { command: 'x' } } }));
+    const link = path.join(process.env.HOME, 'link');
+    fs.symlinkSync(path.join(root, 'inner'), link);
+    assert.deepEqual(unapprovedProjectServers(link, process.env.CLAUDE_CONFIG_DIR), ['above']);
+  `));
+});
+
 test('listing never checks connectors from a project you have not approved or trusted', (t) => {
   const s = sandbox(t);
   const where = path.join(s.tmp, 'where.txt');

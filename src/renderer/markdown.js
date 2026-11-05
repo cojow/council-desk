@@ -21,10 +21,13 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 
 // Only what Markdown itself produces: text from Claude (which can be steered by files or web
 // pages it reads) must not be able to restyle the app, draw forms, or imitate its dialogs,
-// e.g. hide what a permission card is asking to run.
+// e.g. hide what a permission card is asking to run. DOMPurify lets data-* and aria-*
+// attributes past an allowlist unless told otherwise.
 const SANITIZE = {
   ALLOWED_TAGS: ['a', 'b', 'blockquote', 'br', 'code', 'dd', 'del', 'details', 'div', 'dl', 'dt', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'img', 'input', 'kbd', 'li', 'ol', 'p', 'pre', 's', 'span', 'strong', 'sub', 'summary', 'sup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'ul'],
   ALLOWED_ATTR: ['align', 'alt', 'checked', 'class', 'colspan', 'href', 'rowspan', 'src', 'start', 'title', 'type'],
+  ALLOW_DATA_ATTR: false,
+  ALLOW_ARIA_ATTR: false,
 };
 
 export function renderMarkdown(el, text) {
