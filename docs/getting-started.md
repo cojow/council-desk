@@ -57,3 +57,9 @@ If you use [council-board](https://github.com/cojow/council-board), turn on **St
 ## Removing it
 
 Delete the app and the source folder. The app's own settings are in `~/Library/Application Support/Council Desk`. Your sessions belong to Claude Code and stay in its folder.
+
+## Keeping sessions organized
+
+The sidebar groups sessions by project and shows anything waiting on you or finished but unread under **Needs you**. The buttons beside "Sessions" add a folder, select several sessions, and open sorting, filters and cleanup.
+
+Pins, archives and folders are stored by Council Desk, so they don't appear in the `claude` terminal. Claude Code also deletes sessions by itself, after 30 days by default, and that includes pinned, archived and foldered ones. To keep them longer, set [`cleanupPeriodDays`](https://code.claude.com/docs/en/settings) in your Claude Code settings.

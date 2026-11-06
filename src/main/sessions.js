@@ -217,6 +217,14 @@ export class SessionManager {
     return tagSession(sessionId, tag ?? null, cwd ? { dir: cwd } : undefined);
   }
 
+  // True while Claude is working in this session or waiting on an answer.
+  isActive(sessionId) {
+    for (const session of this.live.values()) {
+      if (session.sessionId === sessionId && (session.busy || session.pending.size)) return true;
+    }
+    return false;
+  }
+
   async remove(sessionId, cwd) {
     for (const session of this.live.values()) if (session.sessionId === sessionId) session.close();
     return deleteSession(sessionId, cwd ? { dir: cwd } : undefined);

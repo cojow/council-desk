@@ -15,6 +15,21 @@ import { currentColors, installCustomThemes, renderIcon } from './custom-themes.
 import { applyTheme, themeEditor, themePanel } from './themes.js';
 import { Conversation } from './transcript.js';
 import { base, h, ICONS, svg } from './tools.js';
+import {
+  applyArchive,
+  archiveCandidates,
+  assignFolder,
+  filterChoices,
+  filterSessions,
+  groupByDate,
+  groupByProject,
+  hasFilters,
+  projectIndex,
+  removeFolder,
+  selectRange,
+  sortIntoSections,
+  sortSessions,
+} from '../shared/session-list.js';
 import { ensureTrusted } from './trust-dialog.js';
 
 const api = window.api;
@@ -50,6 +65,13 @@ const state = {
   fastInfo: null,
   query: '',
   searchHits: new Map(), // sessionId -> matching line from inside the conversation
+  filters: {}, // sidebar filters; only for this run, so nothing stays hidden after a restart
+  selecting: false,
+  selected: new Set(),
+  selectAnchor: null,
+  visibleOrder: [], // session ids in the order shown, for shift-click and Select all
+  undo: null, // { label, restore } for the last bulk change
+  dragIds: null,
 };
 
 // ---------- helpers ----------
@@ -504,56 +526,235 @@ function moveHelperGroup(s, into) {
   renderSidebar();
 }
 
+function saveSettings(patch) {
+  Object.assign(state.settings, patch);
+  api.settings.set(patch);
+}
+
+// What a session needs from you right now. Waiting on an answer comes first, so a session
+// paused on a question never just looks busy.
+function sessionStatus(s) {
+  const conv = convForSession(s.sessionId);
+  if (conv?.cards.size) return 'waiting';
+  if (conv?.busy) return 'busy';
+  if ((state.settings.unreadSessions || []).includes(s.sessionId)) return 'unread';
+  return null;
+}
+const STATUS_TEXT = { waiting: 'Waiting for your answer', busy: 'Working', unread: 'Finished, not read yet' };
+
+function setUnread(sessionId, unread) {
+  const list = state.settings.unreadSessions || [];
+  if (!sessionId || list.includes(sessionId) === unread) return;
+  saveSettings({ unreadSessions: unread ? [...list, sessionId] : list.filter((id) => id !== sessionId) });
+}
+
+// A session's folder, as long as that folder still exists.
+function folderOf(sessionId) {
+  const id = state.settings.sessionFolderOf?.[sessionId];
+  return (state.settings.sessionFolders || []).some((f) => f.id === id) ? id : null;
+}
+
+// Open or closed sections are remembered. Opening a session opens its section once, so you
+// can see where it is; you can still close it again.
+function sectionOpen(key, list, defaultOpen) {
+  const saved = state.settings.sidebarSections?.[key];
+  const activeId = state.active?.sessionId;
+  if (activeId && state.revealedFor !== activeId && list.some((s) => s.sessionId === activeId)) {
+    state.revealedFor = activeId;
+    if (!(saved ?? defaultOpen)) setSection(key, true);
+    return true;
+  }
+  return saved ?? defaultOpen;
+}
+function setSection(key, open) {
+  saveSettings({ sidebarSections: { ...(state.settings.sidebarSections || {}), [key]: open } });
+}
+
+function sectionHeader({ label, count, open, toggle, icon, title, working, menu, folderId }) {
+  const onKey = (e) => {
+    if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return;
+    e.preventDefault();
+    toggle();
+  };
+  const dropTarget = folderId
+    ? {
+        ondragover: (e) => {
+          if (!state.dragIds) return;
+          e.preventDefault();
+          e.currentTarget.classList.add('drop');
+        },
+        ondragleave: (e) => e.currentTarget.classList.remove('drop'),
+        ondrop: (e) => {
+          e.preventDefault();
+          const ids = state.dragIds;
+          state.dragIds = null;
+          if (ids) moveToFolder(ids, folderId);
+        },
+      }
+    : {};
+  const header = h(
+    'div',
+    { class: `sidebar-group section-toggle archived-toggle${open ? ' open' : ''}`, role: 'button', tabindex: 0, 'aria-expanded': String(open), title, onclick: toggle, onkeydown: onKey, ...dropTarget },
+    svg(ICONS.chev),
+    icon ? svg(icon) : null,
+    h('span', { class: 'section-name' }, label),
+    h('span', { class: 'section-count' }, String(count)),
+    working ? h('span', { class: 'dot busy', title: 'A session here is working' }) : null,
+  );
+  if (menu) {
+    header.append(h('button', { class: 'more', title: 'More', onclick: (e) => (e.stopPropagation(), menu(e.clientX, e.clientY)) }, svg(ICONS.more)));
+    header.addEventListener('contextmenu', (e) => (e.preventDefault(), menu(e.clientX, e.clientY)));
+  }
+  return header;
+}
+
 function renderSidebar() {
-  if (el.sessionList.querySelector('input.rename')) return;
+  if (el.sessionList.querySelector('input.rename') || state.dragIds) return;
   const items = [];
   const active = state.active;
   if (active && !active.sessionId && active.hasMessages) {
     items.push(sidebarItem({ title: active.title || 'New session', meta: base(active.cwd), active: true, busy: active.busy }));
   }
+
   const pinned = new Set(state.settings.pinnedSessions || []);
   const archived = new Set(state.settings.archivedSessions || []);
   const query = state.query.trim().toLowerCase();
   const matches = (s) => !query || sessionTitle(s).toLowerCase().includes(query) || state.searchHits.has(s.sessionId);
-  const list = state.sessions.filter(matches);
+  const sort = state.settings.sidebarSort || 'active';
+  const projectFor = projectIndex(state.sessions, worktreesRoot());
+  const applyFilters = (list) => filterSessions(list, state.filters, { projectFor, isRunning: (s) => sessionStatus(s) === 'busy' || sessionStatus(s) === 'waiting' });
+  const list = sortSessions(state.sessions.filter(matches), sort);
+  const order = [];
 
-  const itemFor = (s) => {
+  const itemFor = (s, { inProject = false, needs = false } = {}) => {
+    order.push(s.sessionId);
     const conv = convForSession(s.sessionId);
     const isPinned = pinned.has(s.sessionId);
     const isArchived = archived.has(s.sessionId);
+    const status = sessionStatus(s);
+    const branch = worktreeBranch(s.cwd);
+    const where = branch ? `⎇ ${branch.slice(7)}` : inProject ? '' : base(s.cwd) || 'No folder';
+    const lead = needs ? [status === 'waiting' ? 'Waiting for your answer' : 'Finished', projectFor(s.cwd).name] : [isArchived && query ? 'Archived' : '', where];
     return sidebarItem({
       title: conv?.title || sessionTitle(s),
-      meta: `${isArchived && query ? 'Archived · ' : ''}${worktreeBranch(s.cwd) ? `⎇ ${worktreeBranch(s.cwd).slice(7)}` : base(s.cwd) || 'No folder'} · ${timeAgo(s.lastModified)}`,
+      meta: [...lead, timeAgo(s.lastModified)].filter(Boolean).join(' · '),
       snippet: query && state.searchHits.get(s.sessionId),
       active: active?.sessionId === s.sessionId,
-      busy: conv?.busy,
+      status,
       pinned: isPinned,
-      open: () => openSession(s),
-      menu: (x, y, item) =>
-        openMenu(x, y, [
-          { label: isPinned ? 'Unpin' : 'Pin to top', run: () => toggleListed('pinnedSessions', s.sessionId) },
-          { label: 'Open in split view', run: () => openInSplit(s) },
-          { label: 'Rename', run: () => startRename(item, s) },
-          { label: 'Show folder in Finder', run: () => api.app.reveal(s.cwd) },
-          { label: isArchived ? 'Unarchive' : 'Archive', run: () => toggleListed('archivedSessions', s.sessionId) },
-          isHelperSession(s) ? { label: 'Move out of Helper sessions', run: () => moveHelperGroup(s, false) } : { label: 'Move to Helper sessions', run: () => moveHelperGroup(s, true) },
-          ...(worktreeBranch(s.cwd) ? [{ label: 'Remove branch folder…', run: () => removeWorktree(s) }] : []),
-          { label: 'Delete', danger: true, run: () => removeSession(s) },
-        ]),
+      selecting: state.selecting,
+      selected: state.selected.has(s.sessionId),
+      open: (e) => (state.selecting || e?.metaKey ? selectClick(s, e) : openSession(s)),
+      drag: () => (state.selecting && state.selected.has(s.sessionId) ? [...state.selected] : [s.sessionId]),
+      menu: state.selecting
+        ? null
+        : (x, y, item) =>
+            openMenu(x, y, [
+              { label: isPinned ? 'Unpin' : 'Pin to top', run: () => toggleListed('pinnedSessions', s.sessionId) },
+              { label: 'Open in split view', run: () => openInSplit(s) },
+              { label: 'Rename', run: () => startRename(item, s) },
+              { label: 'Move to folder…', run: () => chooseFolder(x, y, [s.sessionId]) },
+              { label: 'Select', run: () => selectClick(s) },
+              { label: 'Show folder in Finder', run: () => api.app.reveal(s.cwd) },
+              { label: isArchived ? 'Unarchive' : 'Archive', run: () => toggleListed('archivedSessions', s.sessionId) },
+              isHelperSession(s) ? { label: 'Move out of Helper sessions', run: () => moveHelperGroup(s, false) } : { label: 'Move to Helper sessions', run: () => moveHelperGroup(s, true) },
+              ...(branch ? [{ label: 'Remove branch folder…', run: () => removeWorktree(s) }] : []),
+              { label: 'Delete', danger: true, run: () => removeSession(s) },
+            ]),
     });
   };
 
+  // Date headings show in a section only when they say something, i.e. it spans more than one.
+  const dated = (sessions, { inProject = false, always = false } = {}) => {
+    const plain = () => sessions.map((s) => itemFor(s, { inProject }));
+    if (state.settings.sidebarDateHeadings === false) return plain();
+    const groups = groupByDate(sessions, sort);
+    if (groups.length < 2 && !always) return plain();
+    return groups.flatMap((group) => [h('div', { class: 'date-heading' }, group.label), ...group.sessions.map((s) => itemFor(s, { inProject }))]);
+  };
+  const anyWorking = (sessions) => sessions.some((s) => convForSession(s.sessionId)?.busy);
+
+  if (state.undo) {
+    items.push(
+      h(
+        'div',
+        { class: 'sidebar-note' },
+        h('span', {}, state.undo.label),
+        h('button', { onclick: () => { state.undo.restore(); state.undo = null; renderSidebar(); } }, 'Undo'),
+        h('button', { title: 'Dismiss', 'aria-label': 'Dismiss', onclick: () => { state.undo = null; renderSidebar(); } }, '×'),
+      ),
+    );
+  }
+  if (hasFilters(state.filters)) {
+    items.push(h('div', { class: 'sidebar-note' }, h('span', {}, 'Filtered list'), h('button', { onclick: clearFilters }, 'Clear')));
+  }
+
   if (query) {
-    items.push(...list.map(itemFor));
+    items.push(...applyFilters(list).map((s) => itemFor(s)));
   } else {
-    // Pinned and archived win over the helper group (they're your own choices).
-    const top = list.filter((s) => pinned.has(s.sessionId) && !archived.has(s.sessionId));
-    const helping = list.filter((s) => !pinned.has(s.sessionId) && !archived.has(s.sessionId) && isHelperSession(s));
-    const rest = list.filter((s) => !pinned.has(s.sessionId) && !archived.has(s.sessionId) && !isHelperSession(s));
-    const old = list.filter((s) => archived.has(s.sessionId));
-    if (top.length) items.push(h('div', { class: 'sidebar-group' }, 'Pinned'), ...top.map(itemFor));
-    if (top.length && rest.length) items.push(h('div', { class: 'sidebar-group' }, 'Recent'));
-    items.push(...rest.map(itemFor));
+    const sections = sortIntoSections(list, {
+      needsYou: (s) => ['waiting', 'unread'].includes(sessionStatus(s)),
+      archived,
+      pinned,
+      folderOf,
+      isHelper: isHelperSession,
+    });
+    // Needs you ignores the filters: something waiting on you should never be hidden.
+    if (sections.needs.length) {
+      items.push(h('div', { class: 'sidebar-group needs-you' }, `Needs you (${sections.needs.length})`));
+      items.push(...sections.needs.map((s) => itemFor(s, { needs: true })));
+    }
+    const top = applyFilters(sections.pinned);
+    if (top.length) items.push(h('div', { class: 'sidebar-group' }, 'Pinned'), ...top.map((s) => itemFor(s)));
+
+    for (const folder of state.settings.sessionFolders || []) {
+      const inside = applyFilters(sections.folders.get(folder.id) || []);
+      if (!inside.length && hasFilters(state.filters)) continue;
+      const key = `folder:${folder.id}`;
+      const open = sectionOpen(key, inside, true);
+      items.push(
+        sectionHeader({
+          label: folder.name,
+          count: inside.length,
+          open,
+          icon: ICONS.folder,
+          working: anyWorking(inside),
+          folderId: folder.id,
+          toggle: () => (setSection(key, !open), renderSidebar()),
+          menu: (x, y) =>
+            openMenu(x, y, [
+              { label: 'Rename folder…', run: () => renameFolder(folder) },
+              { label: 'Delete folder (keeps its sessions)', danger: true, run: () => deleteFolder(folder) },
+            ]),
+        }),
+      );
+      if (open) items.push(...dated(inside));
+    }
+
+    const rest = applyFilters(sections.rest);
+    if (state.settings.sidebarGroupProjects === false) {
+      if (rest.length && items.some((node) => node.classList?.contains('sidebar-group'))) items.push(h('div', { class: 'sidebar-group' }, 'Recent'));
+      items.push(...dated(rest, { always: true }));
+    } else {
+      for (const project of groupByProject(rest, projectFor, sort)) {
+        const key = `project:${project.key}`;
+        // Projects you've used this past week start open, older ones closed, so the list starts short.
+        const open = sectionOpen(key, project.sessions, Date.now() - project.latest < 7 * 86400000);
+        items.push(
+          sectionHeader({
+            label: project.name,
+            count: project.sessions.length,
+            open,
+            title: project.key.startsWith('worktrees:') ? 'Branch folders' : tilde(project.key),
+            working: anyWorking(project.sessions),
+            toggle: () => (setSection(key, !open), renderSidebar()),
+          }),
+        );
+        if (open) items.push(...dated(project.sessions, { inProject: true }));
+      }
+    }
+
+    const helping = applyFilters(sections.helpers);
     if (helping.length) {
       // Closed by default. Opening one of them (e.g. from a notification) opens the group once,
       // so you can see where it is; you can still close it. A dot shows one is working.
@@ -562,32 +763,41 @@ function renderSidebar() {
         state.showHelpers = true;
       }
       const open = Boolean(state.showHelpers);
-      const working = helping.some((s) => convForSession(s.sessionId)?.busy);
       items.push(
-        h(
-          'button',
-          { class: `sidebar-group archived-toggle${open ? ' open' : ''}`, title: 'Sessions that helped other agents', onclick: () => ((state.showHelpers = !open), renderSidebar()) },
-          svg(ICONS.chev),
-          `Helper sessions (${helping.length})`,
-          working ? h('span', { class: 'dot busy', title: 'A helper session is working' }) : null,
-        ),
+        sectionHeader({
+          label: 'Helper sessions',
+          count: helping.length,
+          open,
+          title: 'Sessions that helped other agents',
+          working: anyWorking(helping),
+          toggle: () => ((state.showHelpers = !open), renderSidebar()),
+        }),
       );
-      if (open) items.push(...helping.map(itemFor));
+      if (open) items.push(...dated(helping));
     }
+    const old = applyFilters(sections.archived);
     if (old.length) {
       items.push(
-        h(
-          'button',
-          { class: `sidebar-group archived-toggle${state.showArchived ? ' open' : ''}`, onclick: () => ((state.showArchived = !state.showArchived), renderSidebar()) },
-          svg(ICONS.chev),
-          `Archived (${old.length})`,
-        ),
+        sectionHeader({
+          label: 'Archived',
+          count: old.length,
+          open: Boolean(state.showArchived),
+          toggle: () => ((state.showArchived = !state.showArchived), renderSidebar()),
+        }),
       );
-      if (state.showArchived) items.push(...old.map(itemFor));
+      if (state.showArchived) items.push(...dated(old));
     }
   }
-  if (!items.length) items.push(h('div', { class: 'session-empty' }, query ? 'No matching sessions.' : 'No sessions yet.'));
+  const hasSessions = items.some((node) => node.classList?.contains('session-item') || node.classList?.contains('section-toggle'));
+  if (!hasSessions) items.push(h('div', { class: 'session-empty' }, query ? 'No matching sessions.' : hasFilters(state.filters) ? 'No sessions match these filters.' : 'No sessions yet.'));
+  state.visibleOrder = order;
+  // A selection is only ever what you can see: a filter or a closed section deselects, so
+  // nothing out of sight gets deleted or moved along with it.
+  for (const id of state.selected) if (!order.includes(id)) state.selected.delete(id);
   el.sessionList.replaceChildren(...items);
+  renderBulkBar();
+  $('session-options').classList.toggle('filtered', hasFilters(state.filters));
+  $('select-sessions').classList.toggle('on', state.selecting);
 }
 
 // Adds or removes a session from a saved list (pinnedSessions, archivedSessions).
@@ -603,15 +813,42 @@ function toggleListed(key, sessionId) {
   renderSidebar();
 }
 
-function sidebarItem({ title, meta, snippet, active, busy, pinned, open, menu }) {
+function sidebarItem({ title, meta, snippet, active, busy, status, pinned, selecting, selected, open, drag, menu }) {
+  const shown = status || (busy ? 'busy' : null);
   const item = h(
     'div',
-    { class: `session-item${active ? ' active' : ''}`, role: 'button', tabindex: 0, onclick: () => open?.() },
-    busy ? h('span', { class: 'dot busy' }) : null,
+    {
+      class: `session-item${active ? ' active' : ''}${selecting ? ' selecting' : ''}${selected ? ' selected' : ''}`,
+      role: selecting ? 'checkbox' : 'button',
+      'aria-checked': selecting ? String(Boolean(selected)) : null,
+      tabindex: 0,
+      draggable: drag ? 'true' : null,
+      onclick: (e) => open?.(e),
+    },
+    selecting ? h('span', { class: 'check', 'aria-hidden': 'true' }) : null,
+    shown ? h('span', { class: `dot ${shown}`, title: STATUS_TEXT[shown] }) : null,
     h('span', { class: 'title' }, pinned ? svg(PIN_ICON) : null, title),
     h('span', { class: snippet ? 'meta snippet' : 'meta' }, snippet || meta),
   );
-  item.addEventListener('keydown', (e) => e.key === 'Enter' && open?.());
+  item.addEventListener('keydown', (e) => {
+    if (e.target !== item) return;
+    if (e.key === 'Enter' || (selecting && e.key === ' ')) {
+      e.preventDefault();
+      open?.(e);
+    }
+  });
+  if (drag) {
+    item.addEventListener('dragstart', (e) => {
+      state.dragIds = drag();
+      e.dataTransfer.effectAllowed = 'move';
+      // A type of our own, so a session dropped on the message box doesn't paste anything.
+      e.dataTransfer.setData('application/x-session-ids', state.dragIds.join(','));
+    });
+    item.addEventListener('dragend', () => {
+      state.dragIds = null;
+      renderSidebar();
+    });
+  }
   if (menu) {
     item.append(
       h('button', { class: 'more', title: 'More', onclick: (e) => (e.stopPropagation(), menu(e.clientX, e.clientY, item)) }, svg(ICONS.more)),
@@ -619,6 +856,238 @@ function sidebarItem({ title, meta, snippet, active, busy, pinned, open, menu })
     item.addEventListener('contextmenu', (e) => (e.preventDefault(), menu(e.clientX, e.clientY, item)));
   }
   return item;
+}
+
+// ---------- selecting several sessions ----------
+
+function selectClick(s, e) {
+  const id = s.sessionId;
+  state.selecting = true;
+  if (e?.shiftKey && state.selectAnchor) {
+    for (const each of selectRange(state.visibleOrder, state.selectAnchor, id)) state.selected.add(each);
+  } else if (state.selected.has(id)) {
+    state.selected.delete(id);
+  } else {
+    state.selected.add(id);
+  }
+  state.selectAnchor = id;
+  renderSidebar();
+}
+
+function endSelection() {
+  state.selecting = false;
+  state.selected.clear();
+  state.selectAnchor = null;
+}
+
+function stopSelecting() {
+  endSelection();
+  renderSidebar();
+}
+
+function renderBulkBar() {
+  const bar = $('session-bulk');
+  bar.hidden = !state.selecting;
+  if (!state.selecting) return bar.replaceChildren();
+  const ids = [...state.selected];
+  const count = ids.length;
+  const archived = state.settings.archivedSessions || [];
+  const allArchived = count > 0 && ids.every((id) => archived.includes(id));
+  const none = count === 0;
+  bar.replaceChildren(
+    h(
+      'div',
+      { class: 'bulk-row' },
+      h('span', { class: 'bulk-count' }, `${count} selected`),
+      h('button', { onclick: () => { state.visibleOrder.forEach((id) => state.selected.add(id)); renderSidebar(); } }, 'Select all'),
+      h('button', { onclick: stopSelecting }, 'Done'),
+    ),
+    h(
+      'div',
+      { class: 'bulk-row' },
+      h('button', { disabled: none, onclick: () => setArchived(ids, !allArchived) }, allArchived ? 'Unarchive' : 'Archive'),
+      h('button', { disabled: none, onclick: (e) => chooseFolder(e.clientX, e.clientY, ids) }, 'Move to…'),
+      h('button', { class: 'danger', disabled: none, onclick: () => deleteSessions(ids) }, 'Delete…'),
+    ),
+  );
+}
+
+// Archiving a lot at once can be undone, because picking them back out by hand couldn't be.
+function setArchived(ids, archive) {
+  const lists = () => ({ archived: state.settings.archivedSessions || [], pinned: state.settings.pinnedSessions || [] });
+  const save = ({ archived, pinned }) => saveSettings({ archivedSessions: archived, pinnedSessions: pinned });
+  const change = applyArchive(lists(), ids, archive);
+  save(change);
+  state.undo = { label: `${archive ? 'Archived' : 'Unarchived'} ${plural(ids.length, 'session')}`, restore: () => save(change.undo(lists())) };
+  endSelection();
+  renderSidebar();
+}
+
+// Deleting asks once, for the whole batch, and leaves out anything still working or waiting.
+async function deleteSessions(ids) {
+  const chosen = state.sessions.filter((s) => ids.includes(s.sessionId));
+  const active = (s) => ['busy', 'waiting'].includes(sessionStatus(s));
+  const deletable = chosen.filter((s) => !active(s));
+  if (!deletable.length) {
+    alert(`${chosen.length === 1 ? 'That session is' : 'Those sessions are'} still working or waiting for you. Stop them before deleting.`);
+    return;
+  }
+  const result = await api.sessions.removeMany(
+    deletable.map((s) => ({ sessionId: s.sessionId, cwd: s.cwd, title: sessionTitle(s) })),
+    chosen.length - deletable.length,
+  );
+  if (!result) return;
+  forgetSessions(result.removed);
+  if (result.failed.length) alert(`Couldn't delete ${plural(result.failed.length, 'session')}: ${result.failed[0].error}`);
+  endSelection();
+  refreshSessions();
+}
+
+// ---------- your own folders ----------
+
+function askFolderName({ title, value = '', action }) {
+  return new Promise((resolve) => {
+    const input = h('input', { type: 'text', class: 'folder-name', value, maxlength: 60, placeholder: 'Folder name', 'aria-label': 'Folder name' });
+    openModal({
+      title,
+      body: input,
+      actions: [
+        { label: 'Cancel', run: () => resolve(null) },
+        { label: action, primary: true, run: () => resolve(input.value.trim() || null) },
+      ],
+      onClose: () => resolve(null),
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      input.closest('.modal')?.querySelector('.btn.primary')?.click();
+    });
+    input.focus();
+    input.select();
+  });
+}
+
+async function createFolder(thenMove = []) {
+  const name = await askFolderName({ title: 'New folder', action: 'Create' });
+  if (!name) return;
+  const folder = { id: crypto.randomUUID(), name };
+  saveSettings({ sessionFolders: [...(state.settings.sessionFolders || []), folder] });
+  if (thenMove.length) moveToFolder(thenMove, folder.id);
+  else renderSidebar();
+}
+
+async function renameFolder(folder) {
+  const name = await askFolderName({ title: 'Rename folder', value: folder.name, action: 'Rename' });
+  if (!name) return;
+  saveSettings({ sessionFolders: state.settings.sessionFolders.map((f) => (f.id === folder.id ? { ...f, name } : f)) });
+  renderSidebar();
+}
+
+function deleteFolder(folder) {
+  const lists = () => ({ folders: state.settings.sessionFolders || [], folderOf: state.settings.sessionFolderOf || {} });
+  const save = ({ folders, folderOf }) => saveSettings({ sessionFolders: folders, sessionFolderOf: folderOf });
+  const change = removeFolder(lists(), folder);
+  save(change);
+  state.undo = { label: `Deleted folder "${folder.name}"`, restore: () => save(change.undo(lists())) };
+  renderSidebar();
+}
+
+function moveToFolder(ids, folderId) {
+  saveSettings({ sessionFolderOf: assignFolder(state.settings.sessionFolderOf || {}, ids, folderId) });
+  endSelection();
+  renderSidebar();
+}
+
+function chooseFolder(x, y, ids) {
+  const inFolder = ids.some((id) => folderOf(id));
+  openMenu(x, y, [
+    ...(state.settings.sessionFolders || []).map((folder) => ({ label: folder.name, run: () => moveToFolder(ids, folder.id) })),
+    { label: 'New folder…', run: () => createFolder(ids) },
+    ...(inFolder ? [{ label: 'Remove from folder', run: () => moveToFolder(ids, null) }] : []),
+  ]);
+}
+
+// ---------- sort, filter and clean up ----------
+
+function clearFilters() {
+  state.filters = {};
+  closePopover();
+  renderSidebar();
+}
+
+function checkRow(label, checked, onchange) {
+  return h('label', { class: 'options-check' }, h('input', { type: 'checkbox', checked, onchange: (e) => onchange(e.target.checked) }), label);
+}
+function selectRow(label, value, choices, onchange) {
+  return h(
+    'label',
+    { class: 'options-select' },
+    h('span', {}, label),
+    h(
+      'select',
+      { onchange: (e) => onchange(e.target.value) },
+      choices.map((choice) => h('option', { value: choice.value, selected: choice.value === value }, choice.label)),
+    ),
+  );
+}
+
+// Sessions that stay put when cleaning up: kept on purpose, or still wanting attention.
+function keptFromCleanup(s) {
+  const id = s.sessionId;
+  return (state.settings.archivedSessions || []).includes(id) || (state.settings.pinnedSessions || []).includes(id) || Boolean(folderOf(id)) || Boolean(sessionStatus(s));
+}
+
+function openSessionOptions() {
+  const anchor = $('session-options').getBoundingClientRect();
+  const projectFor = projectIndex(state.sessions, worktreesRoot());
+  const { projects, branches } = filterChoices(state.sessions, projectFor);
+  const setFilter = (patch) => {
+    state.filters = { ...state.filters, ...patch };
+    renderSidebar();
+  };
+  const setView = (patch) => {
+    saveSettings(patch);
+    renderSidebar();
+  };
+
+  const cleanupOld = (days) => archiveCandidates(state.sessions, { days, keep: keptFromCleanup });
+  const cleanup = h('button', { class: 'btn' });
+  const daysChoice = selectRow(
+    'Older than',
+    '14',
+    [7, 14, 30, 90].map((days) => ({ value: String(days), label: `${days} days` })),
+    () => updateCleanup(),
+  );
+  const days = () => Number(daysChoice.querySelector('select').value);
+  function updateCleanup() {
+    const count = cleanupOld(days()).length;
+    cleanup.textContent = count ? `Archive ${plural(count, 'session')}` : 'Nothing to archive';
+    cleanup.disabled = !count;
+  }
+  cleanup.addEventListener('click', () => {
+    setArchived(cleanupOld(days()).map((s) => s.sessionId), true);
+    closePopover();
+  });
+  updateCleanup();
+
+  const node = h(
+    'div',
+    { class: 'session-options', style: `left:${Math.round(anchor.left)}px;top:${Math.round(anchor.bottom + 6)}px` },
+    h('div', { class: 'options-title' }, 'View'),
+    checkRow('Group by project', state.settings.sidebarGroupProjects !== false, (on) => setView({ sidebarGroupProjects: on })),
+    checkRow('Date headings', state.settings.sidebarDateHeadings !== false, (on) => setView({ sidebarDateHeadings: on })),
+    selectRow('Sort by', state.settings.sidebarSort || 'active', [{ value: 'active', label: 'Last active' }, { value: 'created', label: 'Date created' }], (value) => setView({ sidebarSort: value })),
+    h('div', { class: 'options-title' }, 'Filter'),
+    selectRow('Project', state.filters.project ?? '', [{ value: '', label: 'All projects' }, ...projects.filter((p) => p.key).map((p) => ({ value: p.key, label: p.name }))], (value) => setFilter({ project: value })),
+    selectRow('Branch', state.filters.branch ?? '', [{ value: '', label: 'All branches' }, ...branches.map((b) => ({ value: b, label: b }))], (value) => setFilter({ branch: value })),
+    checkRow('Running or waiting only', Boolean(state.filters.running), (on) => setFilter({ running: on })),
+    h('div', { class: 'options-title' }, 'Clean up'),
+    daysChoice,
+    cleanup,
+    h('p', { class: 'options-hint' }, 'Pinned sessions, sessions in your folders and anything running are left alone. You can undo this.'),
+    h('p', { class: 'options-hint' }, 'Claude Code deletes old sessions by itself, after 30 days unless its cleanupPeriodDays setting says otherwise. That includes pinned, archived and foldered ones.'),
+  );
+  openPopover('session-options', node);
 }
 
 function startRename(item, s) {
@@ -659,17 +1128,27 @@ function startRename(item, s) {
 
 async function removeSession(s) {
   if (!(await api.sessions.remove(s.sessionId, s.cwd))) return;
-  for (const key of ['pinnedSessions', 'archivedSessions']) {
-    if (!(state.settings[key] || []).includes(s.sessionId)) continue;
-    state.settings[key] = state.settings[key].filter((id) => id !== s.sessionId);
-    api.settings.set({ [key]: state.settings[key] });
+  forgetSessions([s.sessionId]);
+  refreshSessions();
+}
+
+// Takes deleted sessions out of everything the app keeps about them.
+function forgetSessions(ids) {
+  const gone = new Set(ids);
+  const patch = {};
+  for (const key of ['pinnedSessions', 'archivedSessions', 'unreadSessions', 'helperSessions', 'notHelperSessions']) {
+    const list = state.settings[key] || [];
+    if (list.some((id) => gone.has(id))) patch[key] = list.filter((id) => !gone.has(id));
   }
-  const conv = convForSession(s.sessionId);
-  if (conv) {
+  if (ids.some((id) => state.settings.sessionFolderOf?.[id])) patch.sessionFolderOf = assignFolder(state.settings.sessionFolderOf, ids, null);
+  if (Object.keys(patch).length) saveSettings(patch);
+  for (const id of ids) {
+    state.selected.delete(id);
+    const conv = convForSession(id);
+    if (!conv) continue;
     state.convs.delete(conv.key);
     if (state.active === conv) newSession();
   }
-  refreshSessions();
 }
 
 // ---------- conversations ----------
@@ -779,7 +1258,9 @@ function emptyState(conv) {
 
 function show(conv) {
   if (split.current() === conv) split.close();
+  if (state.active !== conv) state.revealedFor = state.helperShownFor = null;
   state.active = conv;
+  setUnread(conv.sessionId, false);
   el.host.replaceChildren(conv.hasMessages ? conv.el : emptyState(conv));
   el.title.textContent = conv.hasMessages ? conv.title || 'New session' : '';
   el.folder.textContent = conv.cwd ? tilde(conv.cwd) : '';
@@ -1044,6 +1525,7 @@ api.onEvent((ev) => {
     case 'busy':
       conv.setBusy(ev.busy);
       if (!ev.busy) {
+        if (!document.hasFocus() || (!isActive && split.current() !== conv)) setUnread(conv.sessionId, true);
         labelHelper(conv);
         scheduleRefreshSessions(300);
         refreshContext(conv);
@@ -1063,11 +1545,13 @@ api.onEvent((ev) => {
     case 'permission':
       conv.showPermission(ev);
       updateAttention(true);
+      renderSidebar();
       notify(conv.key.startsWith('helper-') ? 'Helper session needs your OK' : 'Claude needs your input', ev.title || `${ev.toolName} in ${base(conv.cwd)}`, conv);
       break;
     case 'permission_resolved':
       conv.resolvePermission(ev.id);
       updateAttention(false);
+      renderSidebar();
       break;
     case 'mode':
       conv.mode = ev.mode;
@@ -1300,6 +1784,8 @@ async function openInSplit(s) {
     }
   }
   split.open(conv);
+  setUnread(conv.sessionId, false);
+  renderSidebar();
 }
 
 const viewer = createFileViewer({ api, container: $('file-viewer'), getCwd: () => state.active?.cwd, onShow: () => (changes.close(), split.close(), browserPanel.close()) });
@@ -1409,6 +1895,13 @@ el.fast.addEventListener('click', () => {
 });
 
 $('new-session').addEventListener('click', () => newSession());
+$('new-folder').addEventListener('click', () => createFolder());
+$('select-sessions').addEventListener('click', () => {
+  if (state.selecting) return stopSelecting();
+  state.selecting = true;
+  renderSidebar();
+});
+$('session-options').addEventListener('click', () => togglePopover('session-options', openSessionOptions));
 
 // Session search: titles filter as you type; a moment later, matches from inside
 // conversations are added with the matching line shown under the title.
@@ -1464,6 +1957,12 @@ async function init() {
     commandCache.set('general', api.chat.commands(null).catch(() => []));
   }
   setInterval(() => document.hasFocus() && renderSidebar(), 60000);
+  // Coming back to the app reads whatever is on screen.
+  window.addEventListener('focus', () => {
+    setUnread(state.active?.sessionId, false);
+    setUnread(split.current()?.sessionId, false);
+    renderSidebar();
+  });
 }
 
 // Test hook (used by the screenshot runs): `await window.__councilDesk.ready` before driving the UI.

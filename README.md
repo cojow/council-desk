@@ -33,7 +33,7 @@ See [docs/getting-started.md](docs/getting-started.md) for the key, permissions 
 
 ## What's in it
 
-- **Sessions:** a searchable sidebar with pins, archiving, split view and rewind to an earlier message, undoing Claude's file changes.
+- **Sessions:** a searchable sidebar grouped by project, with a "Needs you" section, your own folders, filters, bulk archive and delete, pins, split view and rewind to an earlier message, undoing Claude's file changes.
 - **Permissions:** the same modes and allow, ask and deny rules as Claude Code, with a screen for managing the rules and a trust prompt for new folders.
 - **Your project at a glance:** a changes pane with diffs, a file viewer, `@` file suggestions, optional branch-per-session worktrees, and a terminal per project.
 - **A browser pane** Claude can navigate, read and click in. Downloads, camera, microphone and location are blocked.

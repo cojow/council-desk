@@ -83,6 +83,7 @@ contextBridge.exposeInMainWorld('api', {
     rename: invoke('sessions:rename'),
     tag: invoke('sessions:tag'),
     remove: invoke('sessions:remove'),
+    removeMany: invoke('sessions:removeMany'),
   },
   chat: {
     send: invoke('chat:send'),

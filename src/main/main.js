@@ -403,6 +403,40 @@ const handlers = {
     return true;
   },
 
+  // One question for the whole batch, naming what goes. Sessions that started working since
+  // the window looked are skipped, not stopped.
+  'sessions:removeMany': async (items, leftOut = 0) => {
+    const named = items.slice(0, 5).map((item) => `• ${String(item.title || 'Untitled').slice(0, 70)}`);
+    if (items.length > named.length) named.push(`…and ${items.length - named.length} more`);
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'warning',
+      message: `Delete ${items.length === 1 ? 'this session' : `these ${items.length} sessions`}?`,
+      detail: [
+        named.join('\n'),
+        "Their conversation history is removed from this Mac and can't be brought back. Files Claude changed are not affected.",
+        leftOut ? `${leftOut} still working or waiting for you ${leftOut === 1 ? 'is' : 'are'} left out.` : '',
+      ].filter(Boolean).join('\n\n'),
+      buttons: ['Delete', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+    });
+    if (response !== 0) return null;
+    const result = { removed: [], failed: [] };
+    for (const { sessionId, cwd } of items) {
+      if (manager.isActive(sessionId)) {
+        result.failed.push({ sessionId, error: 'it started working again' });
+        continue;
+      }
+      try {
+        await manager.remove(sessionId, cwd);
+        result.removed.push(sessionId);
+      } catch (error) {
+        result.failed.push({ sessionId, error: error.message });
+      }
+    }
+    return result;
+  },
+
   // The window asks before the first message in a folder; this makes sure of it.
   'chat:send': ({ text, attachments, ...args }) => {
     if (!trust.isTrusted(args.cwd)) throw untrusted(args.cwd);
